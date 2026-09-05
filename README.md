@@ -1,7 +1,7 @@
 # ascii.art
 
 > **Heads up:** this is vibecoded slop. It was written start to finish by an LLM in one
-> sitting, and I haven't reviewed most of it. It works — I clicked around — but there is no
+> sitting, and I haven't reviewed most of it. It works but there is no
 > test suite, and nothing here has been through a human's judgement. Use accordingly.
 
 Turns an image or a video into ASCII art, in full colour, grayscale or a single ink colour,
