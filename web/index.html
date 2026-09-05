@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCII Art Generator</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26' font-family='monospace'>%23</text></svg>">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><span class="glyph">#</span> ascii<span class="dim">.art</span></div>
+  <div class="file-info" id="fileInfo"><span class="dim">no file loaded</span></div>
+  <div class="stats" id="stats"></div>
+</header>
+
+<main>
+  <aside class="rail" id="rail">
+
+    <section class="group">
+      <h2>Source</h2>
+      <div class="drop-target" id="dropTarget">
+        <p><strong>Drop a file</strong></p>
+        <p class="dim small">JPG · PNG · WEBP · GIF · MP4 · WEBM · MOV</p>
+        <button class="btn" id="browseBtn">Choose file</button>
+        <input type="file" id="fileInput" hidden
+               accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,.mov,.mkv">
+      </div>
+      <div class="samples">
+        <span class="dim small">or try:</span>
+        <button class="chip" data-sample="gradient">gradient</button>
+        <button class="chip" data-sample="bars">color bars</button>
+        <button class="chip" data-sample="motion">motion</button>
+      </div>
+      <div class="upload-progress" id="uploadProgress" hidden><div class="bar"></div></div>
+    </section>
+
+    <section class="group">
+      <h2>Resolution</h2>
+      <div class="row">
+        <label for="cols">Columns</label>
+        <output id="colsOut">120</output>
+      </div>
+      <input type="range" id="cols" min="16" max="480" step="1" value="120">
+      <div class="preset-row" id="colsPresets">
+        <button class="chip" data-cols="48">S</button>
+        <button class="chip" data-cols="96">M</button>
+        <button class="chip" data-cols="160">L</button>
+        <button class="chip" data-cols="240">XL</button>
+        <button class="chip" data-cols="360">XXL</button>
+      </div>
+      <div class="row"><span class="dim small">Grid</span><output id="gridOut" class="small">—</output></div>
+      <div class="row">
+        <label for="cellHeight">Cell height</label>
+        <output id="cellHeightOut">16px</output>
+      </div>
+      <input type="range" id="cellHeight" min="6" max="48" step="1" value="16">
+      <p class="hint">Cell height sets the pixel size of each character, and so the size of exported images and video.</p>
+    </section>
+
+    <section class="group">
+      <h2>Characters</h2>
+      <select id="charsetPreset"></select>
+      <input type="text" id="charsetCustom" spellcheck="false" autocomplete="off"
+             aria-label="Character ramp, ordered dark to light">
+      <p class="hint" id="rampHint">Ordered dark → light.</p>
+      <label class="check"><input type="checkbox" id="sortRamp"> Sort by ink density</label>
+      <label class="check"><input type="checkbox" id="invert"> Invert brightness</label>
+      <div class="row"><label for="font">Font</label></div>
+      <select id="font"></select>
+    </section>
+
+    <section class="group">
+      <h2>Color</h2>
+      <div class="segmented" id="colorMode">
+        <button class="seg is-active" data-mode="color">Color</button>
+        <button class="seg" data-mode="grayscale">Grayscale</button>
+        <button class="seg" data-mode="mono">Mono</button>
+      </div>
+      <div class="row swatches">
+        <label class="swatch" id="inkSwatch"><input type="color" id="ink" value="#e6edf3"><span>Ink</span></label>
+        <label class="swatch"><input type="color" id="bg" value="#0d1117"><span>Background</span></label>
+      </div>
+
+      <div class="row"><label for="brightness">Brightness</label><output id="brightnessOut">0.00</output></div>
+      <input type="range" id="brightness" min="-1" max="1" step="0.01" value="0">
+      <div class="row"><label for="contrast">Contrast</label><output id="contrastOut">1.00</output></div>
+      <input type="range" id="contrast" min="0" max="3" step="0.01" value="1">
+      <div class="row"><label for="gamma">Gamma</label><output id="gammaOut">1.00</output></div>
+      <input type="range" id="gamma" min="0.1" max="3" step="0.01" value="1">
+      <div class="row"><label for="saturation">Saturation</label><output id="saturationOut">1.00</output></div>
+      <input type="range" id="saturation" min="0" max="2" step="0.01" value="1">
+      <button class="btn subtle" id="resetAdjust">Reset adjustments</button>
+    </section>
+
+    <section class="group">
+      <h2>Export</h2>
+      <div class="export-grid">
+        <button class="btn" data-export="png">PNG</button>
+        <button class="btn" data-export="txt">TXT</button>
+        <button class="btn" data-export="ansi">ANSI</button>
+        <button class="btn" data-export="html">HTML</button>
+        <button class="btn" data-export="copy">Copy text</button>
+      </div>
+      <div class="video-export" id="videoExport" hidden>
+        <div class="export-grid">
+          <button class="btn" data-export="mp4">MP4</button>
+          <button class="btn" data-export="webm">WebM</button>
+          <button class="btn" data-export="gif">GIF</button>
+        </div>
+        <div class="row">
+          <label for="exportFps">Export FPS</label>
+          <output id="exportFpsOut">24</output>
+        </div>
+        <input type="range" id="exportFps" min="5" max="60" step="1" value="24">
+        <label class="check"><input type="checkbox" id="exportTrim"> From the playhead to the end</label>
+      </div>
+      <div class="job" id="job" hidden>
+        <div class="bar"><div class="fill" id="jobFill"></div></div>
+        <span class="small dim" id="jobLabel"></span>
+      </div>
+    </section>
+
+    <p class="rail-foot small dim">Renders locally · nothing leaves this machine</p>
+  </aside>
+
+  <section class="stage">
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="gl"></canvas>
+      <div class="empty-state" id="emptyState">
+        <pre class="ascii-logo">   _____ _____ _____ _____ _____
+  |  _  |   __|     |     |     |
+  |     |__   |   --|-   -|-   -|
+  |__|__|_____|_____|_____|_____|</pre>
+        <p>Drop an image or video anywhere to begin.</p>
+      </div>
+    </div>
+
+    <div class="transport" id="transport" hidden>
+      <button class="btn icon" id="playBtn" aria-label="Play or pause">▶</button>
+      <span class="time" id="timeLabel">0:00 / 0:00</span>
+      <input type="range" id="seek" min="0" max="1000" step="1" value="0" aria-label="Seek">
+      <label class="check inline"><input type="checkbox" id="loop" checked> Loop</label>
+      <select id="speed" aria-label="Playback speed">
+        <option value="0.25">0.25×</option>
+        <option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option>
+        <option value="1.5">1.5×</option>
+        <option value="2">2×</option>
+      </select>
+    </div>
+  </section>
+</main>
+
+<div class="dropzone" id="dropzone"><div class="dropzone-inner">Drop to load</div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>

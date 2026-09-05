@@ -1,0 +1,15 @@
+[project]
+name = "ascii-art"
+version = "0.1.0"
+description = "ASCII art generator for images and video, with a WebGL2 live preview"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "python-multipart",
+    "pillow",
+    "numpy",
+]
+
+[tool.uv]
+package = false
