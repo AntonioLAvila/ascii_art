@@ -1,5 +1,9 @@
 # ascii.art
 
+> **Heads up:** this is vibecoded slop. It was written start to finish by an LLM in one
+> sitting, and I haven't reviewed most of it. It works — I clicked around — but there is no
+> test suite, and nothing here has been through a human's judgement. Use accordingly.
+
 Turns an image or a video into ASCII art, in full colour, grayscale or a single ink colour,
 at whatever resolution you ask for. Drop in a JPG, PNG, WEBP, GIF, MP4, WEBM or MOV and the
 result renders live at 60fps while you drag the sliders; export it as a PNG, as text, or as
