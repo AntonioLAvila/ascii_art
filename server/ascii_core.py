@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 
 from .atlas import GlyphAtlas
-from .settings import LUMA, RenderSettings, adjust, glyph_indices, hex_to_rgb
+from .settings import LUMA, RenderSettings, adjust, compute_indices, hex_to_rgb
 
 # Rendering the whole frame at once costs rows*cols*cell_h*cell_w*3 floats, which runs to
 # tens of megabytes on a large grid. Filling the output one text row at a time keeps the
@@ -22,17 +22,20 @@ def output_size(settings: RenderSettings, atlas: GlyphAtlas) -> tuple[int, int]:
     return settings.cols * atlas.cell_w, settings.rows * atlas.cell_h
 
 
-def render(cells: np.ndarray, settings: RenderSettings, atlas: GlyphAtlas) -> np.ndarray:
+def render(cells: np.ndarray, settings: RenderSettings, atlas: GlyphAtlas,
+           t: float = 0.0) -> np.ndarray:
     """Render one frame.
 
     `cells` is a (rows, cols, 3) uint8 array of per-cell average colors — the same thing the
-    browser gets from drawing the source into a cols x rows canvas.
+    browser gets from drawing the source into a cols x rows canvas. `t` is the frame's
+    timestamp in seconds, which is what the noise field drifts against.
     """
     rows, cols = settings.rows, settings.cols
     ch, cw = atlas.cell_h, atlas.cell_w
 
-    rgb, luma = adjust(cells.astype(np.float32) / 255.0, settings)
-    idx = glyph_indices(luma, len(atlas.charset))
+    normalised = cells.astype(np.float32) / 255.0
+    rgb, luma = adjust(normalised, settings)
+    idx = compute_indices(normalised, settings, t)
 
     if settings.color_mode == "color":
         ink = rgb
@@ -55,10 +58,9 @@ def render(cells: np.ndarray, settings: RenderSettings, atlas: GlyphAtlas) -> np
     return out
 
 
-def to_chars(cells: np.ndarray, settings: RenderSettings) -> list[str]:
+def to_chars(cells: np.ndarray, settings: RenderSettings, t: float = 0.0) -> list[str]:
     """The plain-text form of a frame, used for text exports and for parity checks."""
-    _, luma = adjust(cells.astype(np.float32) / 255.0, settings)
-    idx = glyph_indices(luma, len(settings.charset))
+    idx = compute_indices(cells.astype(np.float32) / 255.0, settings, t)
     ramp = settings.charset
     return ["".join(ramp[i] for i in row) for row in idx]
 

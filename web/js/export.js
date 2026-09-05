@@ -27,13 +27,13 @@ export function exportPNG(canvas, filename) {
   });
 }
 
-export function asText(cells, cols, rows, settings) {
-  return gridToChars(cells, cols, rows, settings.charset, settings).join('\n');
+export function asText(cells, cols, rows, settings, time = 0) {
+  return gridToChars(cells, cols, rows, settings, time).join('\n');
 }
 
 /** 24-bit colour ANSI, ready to `cat` in a terminal. */
-export function asAnsi(cells, cols, rows, settings) {
-  const lines = gridToChars(cells, cols, rows, settings.charset, settings);
+export function asAnsi(cells, cols, rows, settings, time = 0) {
+  const lines = gridToChars(cells, cols, rows, settings, time);
   const colors = gridToColors(cells, cols, rows, settings);
   const bg = hexParts(settings.bg);
 
@@ -55,8 +55,8 @@ export function asAnsi(cells, cols, rows, settings) {
 }
 
 /** A standalone HTML page; runs of one colour share a span so the file stays small. */
-export function asHtml(cells, cols, rows, settings, title) {
-  const lines = gridToChars(cells, cols, rows, settings.charset, settings);
+export function asHtml(cells, cols, rows, settings, title, time = 0) {
+  const lines = gridToChars(cells, cols, rows, settings, time);
   const colors = gridToColors(cells, cols, rows, settings);
 
   const body = [];

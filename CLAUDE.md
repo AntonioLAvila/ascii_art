@@ -38,14 +38,29 @@ The same image has to come out of **three renderers**:
 | JS on the CPU | `web/js/sample.js` | TXT / ANSI / HTML / clipboard export |
 | numpy | `server/ascii_core.py` | MP4 / WebM / GIF export |
 
-The adjustment and glyph-selection maths therefore lives in **one module per language**:
+The adjustment, noise-field and glyph-selection maths therefore lives in **one module per
+language**:
 `web/js/adjust.js` (which also emits the GLSL as a template string) and `server/settings.py`.
 **Editing the maths in one place without the other two silently desynchronises exports from
 the preview.** Both files say so in their docstrings.
 
-Verified parity: identical glyph choice on 500 randomised inputs; on a real frame the browser
-and server agree on ~93% of cells and are never more than one ramp step apart, the remainder
-being the difference between the browser's downscale and ffmpeg's.
+Verified parity: identical glyph choice on 500 randomised inputs, and on a full cell grid
+across all eight combinations of dither mode × noise field. On a real frame the browser and
+server agree on ~93% of cells and are never more than one ramp step apart, the remainder being
+the difference between the browser's downscale and ffmpeg's.
+
+**Two rules decide where a new effect goes.** If a fragment shader can evaluate it per cell
+from position and time — the adjustments, the noise field, ordered dithering — write it twice
+in `adjust.js` (JS + GLSL) and once in `settings.py`. If it is sequential, it cannot go in the
+shader at all: **Floyd–Steinberg and Atkinson run on the CPU** in `computeIndices` /
+`compute_indices`, and the finished glyph indices are uploaded as an R8 texture that the
+shader reads instead of picking a glyph itself (`uDitherMode == 2`). The grid is only a few
+thousand cells, so this still runs per frame during playback.
+
+Anything random must use `hash2`, the exact 32-bit integer hash. **Do not reach for
+`fract(sin(...))`** — it differs between GPU vendors and between GPU and CPU, which silently
+desynchronises the preview from exports. Only its top 24 bits become a float, so the value is
+exactly representable in a shader's 32-bit floats.
 
 ### The frame pipeline
 
@@ -91,6 +106,10 @@ Split deliberately, in `web/js/export.js`:
 
 ### Conventions
 
+- The noise field runs off a **video's own playhead** (`sourceTime()` in `main.js`, and
+  `start + n/fps` server-side), not wall time, so an exported frame matches the preview of the
+  same frame. Wall time is used only for stills. An animating effect also forces the render
+  loop to keep drawing — see `app.animating`.
 - **Character ramps are ordered dark → light**: index 0 is what a black cell becomes.
   `web/js/charsets.js` holds the presets.
 - `state.rampInput` is what the user typed; `state.charset` is what actually renders (they

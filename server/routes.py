@@ -159,11 +159,17 @@ def _frame_stream(
     start: float, end: float | None, job: Job,
 ) -> Iterator[np.ndarray]:
     shape = (settings.rows, settings.cols, 3)
+    step = 1.0 / fps if fps else 0.0
     for n, buf in enumerate(
         media.frame_cells(path, settings.cols, settings.rows, fps, start, end), start=1
     ):
         job.frame = n
-        yield ascii_core.render(np.frombuffer(buf, np.uint8).reshape(shape), settings, atlas)
+        # The frame's own timestamp, so the noise field drifts in the export exactly as it
+        # does in the preview, where it runs off the video's playhead.
+        t = start + (n - 1) * step
+        yield ascii_core.render(
+            np.frombuffer(buf, np.uint8).reshape(shape), settings, atlas, t
+        )
 
 
 @router.post("/export")

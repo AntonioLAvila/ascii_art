@@ -1,6 +1,6 @@
 // The control rail: every slider, toggle and picker writes into `app.state`.
 
-import { DEFAULT_ADJUST } from '../adjust.js';
+import { DEFAULT_ADJUST, DIRECTIONS } from '../adjust.js';
 import { findCharset } from '../charsets.js';
 
 const $ = (id) => document.getElementById(id);
@@ -93,6 +93,53 @@ export function bindControls(app, { rebuildAtlas, markDirty }) {
     state.fontLabel = app.fonts.find((f) => f.key === state.font)?.label || 'monospace';
     rebuildAtlas();
   });
+
+  // ------------------------------------------------------------------------ dither
+  $('dither').addEventListener('change', (e) => {
+    state.dither = e.target.value;
+    markDirty();
+  });
+  slider(app, 'ditherStrength', 'ditherStrength', { after: markDirty });
+
+  // -------------------------------------------------------------------- noise field
+  const fxControls = $('fxControls');
+  $('fxMode').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-fx]');
+    if (!btn) return;
+    state.fx = btn.dataset.fx;
+    document.querySelectorAll('#fxMode .seg')
+      .forEach((seg) => seg.classList.toggle('is-active', seg === btn));
+    fxControls.hidden = state.fx === 'none';
+    markDirty();
+  });
+
+  for (const key of ['fxStrength', 'noiseScale', 'noiseSpeed']) {
+    slider(app, key, key, {
+      format: key === 'noiseScale' ? (v) => String(v) : undefined,
+      after: markDirty,
+    });
+  }
+
+  const dirs = $('fxDirs');
+  dirs.innerHTML = DIRECTIONS
+    .map((d) => `<button class="chip" data-dir="${d.key}" title="${d.key}">${d.label}</button>`)
+    .join('');
+  function syncDirs() {
+    dirs.querySelectorAll('[data-dir]').forEach((btn) => {
+      const d = DIRECTIONS.find((v) => v.key === btn.dataset.dir);
+      btn.classList.toggle('is-active', d.x === state.fxDirX && d.y === state.fxDirY);
+    });
+  }
+  dirs.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-dir]');
+    if (!btn) return;
+    const d = DIRECTIONS.find((v) => v.key === btn.dataset.dir);
+    state.fxDirX = d.x;
+    state.fxDirY = d.y;
+    syncDirs();
+    markDirty();
+  });
+  syncDirs();
 
   // ------------------------------------------------------------------------ colour
   const inkSwatch = $('inkSwatch');

@@ -72,6 +72,42 @@
     </section>
 
     <section class="group">
+      <h2>Dither</h2>
+      <select id="dither">
+        <option value="none">None</option>
+        <option value="bayer">Bayer (ordered)</option>
+        <option value="floyd">Floyd&ndash;Steinberg</option>
+        <option value="atkinson">Atkinson</option>
+      </select>
+      <div class="row"><label for="ditherStrength">Strength</label>
+        <output id="ditherStrengthOut">0.80</output></div>
+      <input type="range" id="ditherStrength" min="0" max="1.5" step="0.01" value="0.8">
+      <p class="hint">Mixes neighbouring ramp characters to fake tones the ramp doesn't have.
+        Bayer holds still in video; the diffusion ones give finer detail but shimmer.</p>
+    </section>
+
+    <section class="group">
+      <h2>Noise field</h2>
+      <div class="segmented" id="fxMode">
+        <button class="seg is-active" data-fx="none">Off</button>
+        <button class="seg" data-fx="noise">Noise field</button>
+      </div>
+      <div id="fxControls" hidden>
+        <div class="row"><label for="fxStrength">Strength</label>
+          <output id="fxStrengthOut">0.35</output></div>
+        <input type="range" id="fxStrength" min="0" max="1" step="0.01" value="0.35">
+        <div class="row"><label for="noiseScale">Scale</label>
+          <output id="noiseScaleOut">24</output></div>
+        <input type="range" id="noiseScale" min="2" max="120" step="1" value="24">
+        <div class="row"><label for="noiseSpeed">Speed</label>
+          <output id="noiseSpeedOut">0.35</output></div>
+        <input type="range" id="noiseSpeed" min="0" max="3" step="0.01" value="0.35">
+        <div class="row"><label>Direction</label></div>
+        <div class="dirs" id="fxDirs"></div>
+      </div>
+    </section>
+
+    <section class="group">
       <h2>Color</h2>
       <div class="segmented" id="colorMode">
         <button class="seg is-active" data-mode="color">Color</button>

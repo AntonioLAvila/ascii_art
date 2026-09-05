@@ -1,6 +1,6 @@
 // Application wiring: state, controls, the render loop, and exports.
 
-import { DEFAULT_ADJUST } from './adjust.js';
+import { DEFAULT_ADJUST, DEFAULT_EFFECTS, NEEDS_CPU_DITHER, computeIndices } from './adjust.js';
 import { CHARSETS, DEFAULT_CHARSET, findCharset } from './charsets.js';
 import { buildAtlas, loadFonts, sortByDensity } from './gl/atlas.js';
 import { AsciiRenderer } from './gl/renderer.js';
@@ -15,6 +15,7 @@ const $ = (id) => document.getElementById(id);
 
 const state = {
   ...DEFAULT_ADJUST,
+  ...DEFAULT_EFFECTS,
   cols: 120,
   rows: 60,
   cellHeight: 16,
@@ -40,6 +41,8 @@ const app = {
   fonts: [],
   dirty: true,
   lastCells: null,
+  loadedAt: performance.now(),
+  animating: false,
 };
 
 const canvas = $('gl');
@@ -86,10 +89,24 @@ export function markDirty() {
 
 // ------------------------------------------------------------------------ render loop
 
+/**
+ * The clock the noise field runs on: a video's own playhead, so the effect is identical in
+ * the preview and in an export of the same frame, and wall time for a still.
+ */
+function sourceTime() {
+  if (!app.source) return 0;
+  return app.source.isVideo
+    ? app.source.currentTime
+    : (performance.now() - app.loadedAt) / 1000;
+}
+
 function frame() {
   requestAnimationFrame(frame);
   if (!app.source || !app.atlas) return;
-  if (!app.dirty && !app.source.isPlaying) return;
+
+  // A drifting noise field has to redraw even when nothing else changed.
+  app.animating = state.fx === 'noise' && state.fxStrength > 0 && state.noiseSpeed > 0;
+  if (!app.dirty && !app.source.isPlaying && !app.animating) return;
   app.dirty = false;
 
   state.rows = computeRows();
@@ -97,11 +114,17 @@ function frame() {
     app.source.el, app.source.width, app.source.height, state.cols, state.rows,
   );
   app.lastCells = cells;
-  renderer.render(cells, state.cols, state.rows, state);
+
+  const time = sourceTime();
+  // Error diffusion cannot run in the shader; hand it a finished index grid instead.
+  const indices = NEEDS_CPU_DITHER.has(state.dither)
+    ? computeIndices(cells, state.cols, state.rows, state, time)
+    : null;
+  renderer.render(cells, state.cols, state.rows, state, indices, time);
   canvas.classList.add('is-ready');
   // A still renders once and then stops, so its readout has to update on that last frame
   // rather than waiting for a sampling window that will never close.
-  tickStats(!app.source.isPlaying);
+  tickStats(!app.source.isPlaying && !app.animating);
 }
 
 let frames = 0;
@@ -115,7 +138,8 @@ function tickStats(force = false) {
   frames = 0;
   fpsSince = now;
   // A still only redraws when something changes, so a frame rate would be meaningless.
-  const rate = app.source?.isPlaying ? `<span class="fps">${fps} fps</span>` : 'still';
+  const live = app.source?.isPlaying || app.animating;
+  const rate = live ? `<span class="fps">${fps} fps</span>` : 'still';
   $('stats').innerHTML =
     `${state.cols}x${state.rows} cells · ${canvas.width}x${canvas.height}px · ${rate}`;
 }
@@ -139,6 +163,7 @@ export async function loadFile(file) {
     const previous = app.source?.meta.id;
     app.source?.destroy();
     app.source = await Source.load(meta);
+    app.loadedAt = performance.now();
     if (previous && previous !== meta.id) {
       fetch(`/api/media/${previous}`, { method: 'DELETE' }).catch(() => {});
     }
@@ -185,22 +210,23 @@ async function runExport(kind) {
   }
   const { cols, rows } = state;
   const cells = app.lastCells;
+  const time = sourceTime();
 
   try {
     if (kind === 'png') {
       // The canvas already holds the current frame at full cell resolution.
       await exports.exportPNG(canvas, `${baseName()}-ascii.png`);
     } else if (kind === 'txt') {
-      const text = exports.asText(cells, cols, rows, state);
+      const text = exports.asText(cells, cols, rows, state, time);
       exports.download(new Blob([text], { type: 'text/plain' }), `${baseName()}-ascii.txt`);
     } else if (kind === 'ansi') {
-      const text = exports.asAnsi(cells, cols, rows, state);
+      const text = exports.asAnsi(cells, cols, rows, state, time);
       exports.download(new Blob([text], { type: 'text/plain' }), `${baseName()}-ascii.ans`);
     } else if (kind === 'html') {
-      const html = exports.asHtml(cells, cols, rows, state, `${baseName()} — ASCII`);
+      const html = exports.asHtml(cells, cols, rows, state, `${baseName()} — ASCII`, time);
       exports.download(new Blob([html], { type: 'text/html' }), `${baseName()}-ascii.html`);
     } else if (kind === 'copy') {
-      await navigator.clipboard.writeText(exports.asText(cells, cols, rows, state));
+      await navigator.clipboard.writeText(exports.asText(cells, cols, rows, state, time));
       showToast('ASCII copied to the clipboard');
     } else {
       await runAnimationExport(kind);
@@ -242,6 +268,14 @@ async function runAnimationExport(format) {
       contrast: state.contrast,
       gamma: state.gamma,
       saturation: state.saturation,
+      dither: state.dither,
+      dither_strength: state.ditherStrength,
+      fx: state.fx,
+      fx_strength: state.fxStrength,
+      noise_scale: state.noiseScale,
+      noise_speed: state.noiseSpeed,
+      fx_dir_x: state.fxDirX,
+      fx_dir_y: state.fxDirY,
     },
   };
   if (state.exportTrim) {

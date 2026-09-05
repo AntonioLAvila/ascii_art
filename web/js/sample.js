@@ -5,7 +5,7 @@
 // scale factor aliases badly though, so the reduction is done by repeated halving first —
 // which lands very close to the box filter ffmpeg uses for the server-side export.
 
-import { LUMA, adjustRGB, cellLuma, glyphIndex } from './adjust.js';
+import { LUMA, adjustRGB, cellLuma, computeIndices } from './adjust.js';
 
 export class Sampler {
   constructor() {
@@ -57,17 +57,18 @@ export class Sampler {
   }
 }
 
-/** The character grid for a sampled frame — the basis of every text export. */
-export function gridToChars(cells, cols, rows, charset, adjust) {
-  const ramp = [...charset];
+/**
+ * The character grid for a sampled frame — the basis of every text export.
+ * Goes through `computeIndices` so the noise field and the dither are in the text too,
+ * rather than the text quietly being the undithered version of what is on screen.
+ */
+export function gridToChars(cells, cols, rows, settings, time = 0) {
+  const ramp = [...settings.charset];
+  const indices = computeIndices(cells, cols, rows, settings, time);
   const lines = [];
   for (let y = 0; y < rows; y++) {
     let line = '';
-    for (let x = 0; x < cols; x++) {
-      const i = (y * cols + x) * 4;
-      const lum = cellLuma(cells[i] / 255, cells[i + 1] / 255, cells[i + 2] / 255, adjust);
-      line += ramp[glyphIndex(lum, ramp.length)];
-    }
+    for (let x = 0; x < cols; x++) line += ramp[indices[y * cols + x]];
     lines.push(line);
   }
   return lines;

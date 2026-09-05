@@ -39,6 +39,19 @@ each glyph actually fills and reorders the ramp accordingly, which rescues a han
 whose characters aren't in brightness order. *Invert* flips which end of the ramp bright
 areas get, for art meant to be read as dark-on-light.
 
+**Dither** — the ramp is a coarse quantiser (ten characters for the whole tonal range), so
+flat regions band. Dithering mixes neighbouring ramp characters to fake the tones in between.
+*Bayer* uses a fixed 8×8 threshold matrix, so its texture is stable frame to frame and it is
+the one to reach for on video. *Floyd–Steinberg* and *Atkinson* push each cell's quantisation
+error onto its neighbours, which resolves far more detail in stills but shimmers in motion
+because the pattern is recomputed every frame. *Strength* scales how much error is carried.
+
+**Noise field** — an animated fBm noise field added to the luminance before the character is
+chosen, so the art dissolves and re-forms as the field drifts through it. *Scale* is how many
+cells across a blob is, *Speed* how fast the field moves, *Direction* which way it drifts, and
+*Strength* how far it can push a cell along the ramp. It animates a still image too, and it
+runs off a video's playhead, so an exported clip gets exactly the field the preview showed.
+
 **Colour** — *Colour* keeps each cell's own colour, *Grayscale* drops the saturation, and
 *Mono* paints every character in one ink. Brightness, contrast, gamma and saturation are
 applied before the character is chosen, so they change the art itself and not just its tint.
@@ -72,6 +85,18 @@ choose the same character every time; on a real frame they agree on ~93% of cell
 and are never more than one ramp step apart, the remainder being the difference between the
 browser's downscale and ffmpeg's.
 
+Dithering complicates that neatly. Ordered (Bayer) dithering and the noise field are pure
+functions of a cell's position and the time, so all three renderers just evaluate them. Error
+diffusion is not: every cell depends on the ones scanned before it, which a fragment shader
+cannot express. So Floyd–Steinberg and Atkinson run on the CPU over the cell grid — a few
+thousand cells, well under a millisecond — and the resulting glyph indices are handed to the
+shader as a texture, which it uses instead of choosing for itself.
+
+The noise field needed a hash that agrees across a GPU, JavaScript and numpy. The usual
+`fract(sin(x))` trick doesn't: sine differs between vendors and between GPU and CPU, and the
+preview would drift away from the export. It uses exact 32-bit integer mixing instead, taking
+only the top 24 bits as a float so the value is representable in a shader's 32-bit floats.
+
 Animated input is normalised to WebM the moment it is uploaded. Browsers can't seek the
 frames of a GIF but they seek video natively, so after that conversion there is one playback
 path instead of two, and scrubbing works for free.
@@ -91,7 +116,7 @@ server/
   settings.py       the shared render settings + the canonical adjustment maths
 web/
   index.html        the UI
-  js/adjust.js      the same maths, in JS and as GLSL
+  js/adjust.js      the same maths, in JS and as GLSL: adjustments, noise, dither
   js/gl/            WebGL2 renderer and glyph atlas
   js/sample.js      frame -> cell grid, and the CPU text path
   js/export.js      PNG / TXT / ANSI / HTML, and the export job client

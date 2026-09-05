@@ -249,6 +249,9 @@ input[type="text"] { letter-spacing: 0.05em; }
 .job span { display: block; margin-top: 5px; }
 .job.is-error .fill { background: var(--danger); }
 
+.dirs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 6px; }
+.dirs .chip { border-radius: var(--radius); text-align: center; padding: 5px 0; }
+
 /* ---------------------------------------------------------------- overlays */
 
 .dropzone {

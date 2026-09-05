@@ -23,6 +23,7 @@ precision highp int;
 
 uniform sampler2D uCells;
 uniform sampler2D uAtlas;
+uniform sampler2D uIndices;
 uniform vec2  uResolution;
 uniform vec2  uCellPx;
 uniform vec2  uGrid;
@@ -36,6 +37,13 @@ uniform float uContrast;
 uniform float uGamma;
 uniform float uSaturation;
 uniform float uInvert;
+uniform int   uDitherMode;    // 0 = off, 1 = ordered, 2 = indices supplied by the CPU
+uniform float uDitherStrength;
+uniform float uFxStrength;
+uniform float uNoiseScale;
+uniform float uNoiseSpeed;
+uniform vec2  uFxDir;
+uniform float uTime;
 
 out vec4 fragColor;
 
@@ -48,9 +56,18 @@ void main() {
 
   vec3 raw = texelFetch(uCells, ivec2(cell), 0).rgb;
   vec3 adjusted = adjustRGB(raw);
-  float lum = cellLuma(adjusted);
+  float lum = cellLuma(adjusted) + noiseOffset(cell);
 
-  float gi = clamp(floor(lum * uCount), 0.0, uCount - 1.0);
+  float gi;
+  if (uDitherMode == 2) {
+    // Error diffusion is sequential, so the CPU already picked these.
+    gi = floor(texelFetch(uIndices, ivec2(cell), 0).r * 255.0 + 0.5);
+  } else {
+    if (uDitherMode == 1) {
+      lum += (bayerOffset(int(cell.x), int(cell.y)) - 0.5) * uDitherStrength / uCount;
+    }
+    gi = clamp(floor(lum * uCount), 0.0, uCount - 1.0);
+  }
   vec2 slot = vec2(mod(gi, uAtlasCols), floor(gi / uAtlasCols));
   float coverage = texelFetch(uAtlas, ivec2(slot * uCellPx + inCell), 0).r;
 
@@ -63,8 +80,10 @@ void main() {
 }`;
 
 const UNIFORMS = [
-  'uCells', 'uAtlas', 'uResolution', 'uCellPx', 'uGrid', 'uAtlasCols', 'uCount',
+  'uCells', 'uAtlas', 'uIndices', 'uResolution', 'uCellPx', 'uGrid', 'uAtlasCols', 'uCount',
   'uColorMode', 'uInk', 'uBg', 'uBrightness', 'uContrast', 'uGamma', 'uSaturation', 'uInvert',
+  'uDitherMode', 'uDitherStrength', 'uFxStrength', 'uNoiseScale', 'uNoiseSpeed', 'uFxDir',
+  'uTime',
 ];
 
 const MODES = { color: 0, grayscale: 1, mono: 2 };
@@ -112,12 +131,14 @@ export class AsciiRenderer {
     this.vao = gl.createVertexArray();
     this.cellsTex = this.#makeTexture();
     this.atlasTex = this.#makeTexture();
+    this.indexTex = this.#makeTexture();
     this.atlas = null;
     this.gridSize = [0, 0];
 
     gl.useProgram(program);
     gl.uniform1i(this.loc.uCells, 0);
     gl.uniform1i(this.loc.uAtlas, 1);
+    gl.uniform1i(this.loc.uIndices, 2);
   }
 
   #makeTexture() {
@@ -159,8 +180,11 @@ export class AsciiRenderer {
     this.gridSize = [cols, rows];
   }
 
-  /** `cells` is a cols*rows*4 RGBA byte array of per-cell average colours. */
-  render(cells, cols, rows, settings) {
+  /**
+   * `cells` is a cols*rows*4 RGBA byte array of per-cell average colours.
+   * `indices` is one glyph index per cell, or null when the shader picks them itself.
+   */
+  render(cells, cols, rows, settings, indices = null, time = 0) {
     const { gl, loc } = this;
     this.resize(cols, rows);
 
@@ -172,6 +196,13 @@ export class AsciiRenderer {
 
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.atlasTex);
+
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.indexTex);
+    if (indices) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, cols, rows, 0,
+                    gl.RED, gl.UNSIGNED_BYTE, indices);
+    }
 
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.useProgram(this.program);
@@ -190,6 +221,13 @@ export class AsciiRenderer {
     gl.uniform1f(loc.uGamma, settings.gamma);
     gl.uniform1f(loc.uSaturation, settings.saturation);
     gl.uniform1f(loc.uInvert, settings.invert ? 1 : 0);
+    gl.uniform1i(loc.uDitherMode, indices ? 2 : (settings.dither === 'bayer' ? 1 : 0));
+    gl.uniform1f(loc.uDitherStrength, settings.ditherStrength);
+    gl.uniform1f(loc.uFxStrength, settings.fx === 'noise' ? settings.fxStrength : 0);
+    gl.uniform1f(loc.uNoiseScale, settings.noiseScale);
+    gl.uniform1f(loc.uNoiseSpeed, settings.noiseSpeed);
+    gl.uniform2f(loc.uFxDir, settings.fxDirX, settings.fxDirY);
+    gl.uniform1f(loc.uTime, time);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
